@@ -1,4 +1,4 @@
-name: artic-ncov2019
+name: artic-pipeline
 channels:
   - conda-forge
   - bioconda
@@ -33,7 +33,7 @@ dependencies:
   - artic-network::rampart=1.0
   - pip
   - pip:
-    - git+https://github.com/artic-network/fieldbioinformatics.git
+    - git+https://github.com/artic-network/fieldbioinformatics.git@v1.0.0
     - git+https://github.com/artic-network/Porechop.git@v0.3.2pre
     - binlorry==1.3.0_alpha1
     - ont-fast5-api
