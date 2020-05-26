@@ -4,7 +4,9 @@ import pandas as pd
 import os
 from Bio import SeqIO
 
-#### Configuration #####
+cwd = os.getcwd()
+
+##### Configuration #####
 configfile: workflow.current_basedir + "/config.yaml"
 
 run_name = ""
@@ -13,15 +15,20 @@ if config.get("run_name"):
 else:
     run_name = "nCoV2019"
 
-if config.get("basecalled_path"):
-    config["basecalled_path"] = config["basecalled_path"].rstrip("/") + "/"
-else:
-    config["basecalled_path"]=""
 
-if config.get("output_path"):
-    config["output_path"] = config["output_path"].rstrip("/") + "/"
+config["basecalled_path"] = config["basecalled_path"].rstrip("/")
+
+if config.get("fast5_path"):
+    config["fast5_path"] = config["fast5_path"].rstrip("/")
 else:
-    config["output_path"]="."
+    print("No fast5 path given, assuming fast5_pass in same directory as fastq_pass")
+    fast5_path = config["basecalled_path"].replace("fastq_pass","").rstrip('/') + "/fast5_pass"
+    config["fast5_path"] = fast5_path
+
+if config.get("annotated_path"):
+    config["annotated_path"] = config["annotated_path"].rstrip("/")
+else:
+    config["annotated_path"] = "annotations"
 
 
 barcode_string = ''
@@ -33,10 +40,13 @@ if config.get("samples"):
     samples = yaml.safe_load(handle)
 
     for s in samples:
-        for barcode in samples[s]:
-            barcode_string += barcode + " "
-            barcodes.append(barcode)
-            barcode_to_sample[barcode]=s
+        if s.lower()=="negative":
+            pass
+        else:
+            for barcode in samples[s]:
+                barcode_string += barcode + " "
+                barcodes.append(barcode)
+                barcode_to_sample[barcode]=s
     barcode_string = barcode_string.rstrip(" ")
     config["barcodes"]= barcodes
     print("Found samples in configuration.\n")
@@ -66,48 +76,122 @@ else:
     print("barcode\tsample")
     for barcode in barcode_to_sample:
         print(barcode,'\t',barcode_to_sample[barcode])
-        
+
 ##### Workflow #####
 
 rule all:
     input:
-        expand("binned_{barcode}.fastq",barcode=barcodes)
-        
-rule minimap2:
+        expand("binned_{barcode}.fastq",barcode=barcodes),
+        f"{run_name}_sequencing_summary.txt",
+        expand("{barcode}.consensus.fasta",barcode=barcodes),
+        f"consensus_sequences/{run_name}.fasta"
+
+rule barcoding:
     input:
-        fastq= config["basecalled_path"] + "{barcode}.fastq",
-        ref= workflow.current_basedir + "/../rampart/references.fasta"
-    output:
-        temp("temp/{barcode}.paf")
-    shell:
-        """
-        minimap2 -x map-ont \
-        --secondary=no \
-        --paf-no-hit \
-        --cs \
-        {input.ref:q} \
-        {input.fastq:q} > {output:q}
-        """
-        
-rule parse_mapping:
-    input:
-        fastq= config["basecalled_path"] + "{barcode}.fastq",
-        mapped= "temp/{barcode}.paf"
     params:
-        path_to_script = workflow.current_basedir,
-        barcode= "{barcode}",
-        min_length = config["min_read_length"],
-        max_length = config["max_read_length"],
-        outdir = config["output_path"]
+        path_to_reads = config["basecalled_path"],
+        barcode_str = "{barcode}",
+        prefix = "./binned"
     output:
-        fastq = "binned_{barcode}.fastq"
+        "binned_{barcode}.fastq"
     shell:
-        """
-        python {params.path_to_script}/parse_guppy_barcoding.py \
-        --paf_file {input.mapped:q} \
-        --reads {input.fastq:q} \
-        -o {params.outdir} \
-        -b {params.barcode} \
-        -n {params.min_length} \
-        -x {params.max_length}
-        """
+        "artic guppyplex "
+        "--skip-quality-check "
+        "--min-length 400 "
+        "--max-length 700 "
+        "--directory {params.path_to_reads:q}/{params.barcode_str} "
+        "--prefix {params.prefix:q}"
+
+
+rule get_sequencing_summary_file:
+    input:
+
+    params:
+        path_to_reads = config["basecalled_path"]
+    output:
+        f"{run_name}_sequencing_summary.txt"
+    run:
+        summary_files = []
+        for r,d,f in os.walk(str(params.path_to_reads)):
+            for fn in f:
+                if fn.startswith("sequencing_summary"):
+                    summary_files.append(r + '/' + fn)
+        print(f"Number of sequencing summary files found: {len(summary_files)}")
+
+        summaryfh = open(str(output[0]), "w")
+        dfs = []
+        for summaryfn in summary_files:
+            df = pd.read_csv(summaryfn, sep="\t")
+            # support for local basecalling
+            if 'filename_fast5' in df.columns:
+                df['filename'] = df['filename_fast5']
+            dfs.append(df)
+
+        pd.concat(dfs).to_csv(summaryfh, sep="\t", index=False)
+        summaryfh.close()
+
+rule consensus_get:
+    input:
+        summary = rules.get_sequencing_summary_file.output,
+        reads = "binned_{barcode}.fastq"
+
+    params:
+        primer_scheme_dir = workflow.current_basedir + "/../../../primer_schemes",
+        primer_version = "nCoV-2019/V2",
+        path_to_fast5 = config["fast5_path"],
+        sample_name = "{barcode}"
+
+
+    output:
+        "{barcode}.trimmed.bam",
+        "{barcode}.pass.vcf",
+        "{barcode}.primers.vcf",
+        "{barcode}.variants.tab",
+        "{barcode}.consensus.fasta"
+
+    shell:
+        "artic minion "
+        "--normalise 200 "
+        "--threads 1 "
+        "--scheme-directory {params.primer_scheme_dir} "
+        "--read-file {input.reads:q} "
+        "--fast5-directory {params.path_to_fast5:q}/{params.sample_name} "
+        "--sequencing-summary {input.summary} "
+        "{params.primer_version} "
+        "{params.sample_name}"
+
+rule tidy_up:
+    input:
+        expand("{barcode}.consensus.fasta", barcode = config["barcodes"]),
+        expand("{barcode}.trimmed.bam", barcode = config["barcodes"])
+    params:
+        barcode_to_sample = barcode_to_sample
+    output:
+        f"consensus_sequences/{run_name}.fasta"
+    run:
+        if not os.path.exists("./CLIMB"):
+            shell("mkdir ./CLIMB")
+        for barcode in barcodes:
+            sample = params.barcode_to_sample[barcode]
+            if not os.path.exists("./CLIMB/"+sample):
+                shell("mkdir ./CLIMB/" + sample)
+
+        with open(str(output[0]),"w") as fw:
+            for r,d,f in os.walk(cwd):
+                for fn in f:
+                    if fn.endswith(".consensus.fasta"):
+                        barcode = fn.rstrip(".consensus.fasta")
+
+                        if barcode in params.barcode_to_sample.keys():
+
+                            for record in SeqIO.parse(r + '/' + fn,"fasta"):
+                                barcode = fn.split(".")[0]
+                                sample = params.barcode_to_sample[barcode]
+                                fw2 = open(cwd + "/CLIMB/"+sample+ "/" + sample + ".fasta","w")
+
+                                shell("cp " + r + '/' + barcode + ".primertrimmed.sorted.bam" + " ./CLIMB/"+sample+ "/" + sample + ".bam")
+                                fw.write(f">{sample} barcode={barcode} length={len(record.seq)}\n{record.seq}\n")
+                                fw2.write(f">{sample} barcode={barcode} length={len(record.seq)}\n{record.seq}\n")
+                                fw2.close()
+                            else:
+                                print("Barcode not found", barcode)
