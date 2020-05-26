@@ -38,7 +38,7 @@ dependencies:
   - keras-applications=1.0.8=py_1
   - keras-preprocessing=1.1.0=py_0
   - krb5=1.17.1=h2fd8d38_0
-  - ld_impl_linux-64
+  - ld_impl_linux-64=2.34
   - libblas=3.8.0=14_openblas
   - libcblas=3.8.0=14_openblas
   - libcurl=7.69.1=hf7181ac_0
