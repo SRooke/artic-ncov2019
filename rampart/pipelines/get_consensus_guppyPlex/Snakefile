@@ -137,7 +137,7 @@ rule consensus_get:
 
     params:
         primer_scheme_dir = workflow.current_basedir + "/../../../primer_schemes",
-        primer_version = "nCoV-2019/V2",
+        primer_version = "nCoV-2019/V3",
         path_to_fast5 = config["fast5_path"],
         sample_name = "{barcode}"
 
