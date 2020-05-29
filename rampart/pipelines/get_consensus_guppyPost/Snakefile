@@ -154,7 +154,7 @@ rule consensus_get:
         "--threads 1 "
         "--scheme-directory {params.primer_scheme_dir} "
         "--read-file {input.reads:q} "
-        "--fast5-directory {params.path_to_fast5:q}/"
+        "--fast5-directory {params.path_to_fast5:q}/ "
         "--sequencing-summary {input.summary} "
         "{params.primer_version} "
         "{params.sample_name}"
