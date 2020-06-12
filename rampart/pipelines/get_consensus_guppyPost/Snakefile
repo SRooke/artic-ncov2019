@@ -5,6 +5,7 @@ import os
 from Bio import SeqIO
 
 cwd = os.getcwd()
+shell.executable('bash')
 
 ##### Configuration #####
 configfile: workflow.current_basedir + "/config.yaml"
