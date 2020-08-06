@@ -21,7 +21,6 @@ dependencies:
   - snakemake-minimal=5.8.1
   - pip
   - pip:
-    - artic==1.0.0
     - chardet==3.0.4
     - cycler==0.10.0
     - idna==2.9
