@@ -132,7 +132,6 @@ rule get_sequencing_summary_file:
 
 rule consensus_get:
     input:
-        summary = rules.get_sequencing_summary_file.output,
         reads = "binned_{barcode}.fastq"
 
     params:
@@ -157,7 +156,7 @@ rule consensus_get:
         "--medaka "
         "--skip-nanopolish "
         #"--fast5-directory {params.path_to_fast5:q}/{params.sample_name} "
-        "--sequencing-summary {input.summary} "
+        #"--sequencing-summary {input.summary} "
         "{params.primer_version} "
         "{params.sample_name}"
 
