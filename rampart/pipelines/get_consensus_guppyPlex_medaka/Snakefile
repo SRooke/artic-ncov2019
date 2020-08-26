@@ -18,12 +18,6 @@ else:
 
 config["basecalled_path"] = config["basecalled_path"].rstrip("/")
 config["run_path"] = config["basecalled_path"].replace("fastq_pass","").rstrip("/")
-if config.get("fast5_path"):
-    config["fast5_path"] = config["fast5_path"].rstrip("/")
-else:
-    print("No fast5 path given, assuming fast5_pass in same directory as fastq_pass")
-    fast5_path = config["basecalled_path"].replace("fastq_pass","").rstrip('/') + "/fast5_pass"
-    config["fast5_path"] = fast5_path
 
 if config.get("annotated_path"):
     config["annotated_path"] = config["annotated_path"].rstrip("/")
@@ -137,13 +131,11 @@ rule consensus_get:
     params:
         primer_scheme_dir = workflow.current_basedir + "/../../../primer_schemes",
         primer_version = "nCoV-2019/V3",
-        path_to_fast5 = config["fast5_path"],
         sample_name = "{barcode}"
 
 
     output:
         "{barcode}.trimmed.rg.sorted.bam",
-        "{barcode}.merged.vcf",
         "{barcode}.consensus.fasta"
 
     shell:
