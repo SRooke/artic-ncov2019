@@ -76,9 +76,9 @@ else:
 rule all:
     input:
         expand("binned_{barcode}.fastq",barcode=barcodes),
-        f"{run_name}_sequencing_summary.txt",
-        expand("{barcode}.consensus.fasta",barcode=barcodes),
-        f"consensus_sequences/{run_name}.fasta"
+                 f"consensus_sequences/{run_name}.fasta",
+        expand("{barcode}.consensus.fasta",barcode=barcodes)
+
 
 rule barcoding:
     input:
@@ -95,34 +95,6 @@ rule barcoding:
         "--max-length 700 "
         "--directory {params.path_to_reads:q}/{params.barcode_str} "
         "--prefix {params.prefix:q}"
-
-
-rule get_sequencing_summary_file:
-    input:
-
-    params:
-        path_to_run = config["run_path"]
-    output:
-        f"{run_name}_sequencing_summary.txt"
-    run:
-        summary_files = []
-        for r,d,f in os.walk(str(params.path_to_run)):
-            for fn in f:
-                if fn.startswith("sequencing_summary"):
-                    summary_files.append(r + '/' + fn)
-        print(f"Number of sequencing summary files found: {len(summary_files)}")
-
-        summaryfh = open(str(output[0]), "w")
-        dfs = []
-        for summaryfn in summary_files:
-            df = pd.read_csv(summaryfn, sep="\t")
-            # support for local basecalling
-            if 'filename_fast5' in df.columns:
-                df['filename'] = df['filename_fast5']
-            dfs.append(df)
-
-        pd.concat(dfs).to_csv(summaryfh, sep="\t", index=False)
-        summaryfh.close()
 
 rule consensus_get:
     input:
@@ -147,8 +119,6 @@ rule consensus_get:
         "--read-file {input.reads:q} "
         "--medaka "
         "--skip-nanopolish "
-        #"--fast5-directory {params.path_to_fast5:q}/{params.sample_name} "
-        #"--sequencing-summary {input.summary} "
         "{params.primer_version} "
         "{params.sample_name}"
 
